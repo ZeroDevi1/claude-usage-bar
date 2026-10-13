@@ -59,9 +59,17 @@ claude plugin install usage-bar@claude-usage-bar
 
 ### 更新与卸载
 
+更新要先刷新本机缓存的 marketplace，否则 `update` 看不到新版本，会一直报告“已是最新”：
+
+```bash
+claude plugin marketplace update claude-usage-bar
+```
+
 ```bash
 claude plugin update usage-bar@claude-usage-bar
 ```
+
+卸载：
 
 ```bash
 claude plugin uninstall usage-bar@claude-usage-bar
