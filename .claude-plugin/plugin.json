@@ -1,18 +1,12 @@
 {
   "name": "usage-bar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "输入框上方的胶囊状态栏：上下文、5h/7d 限额、费用、token 与速度，可展开的窗口卡片，以及提示缓存保活。",
   "author": {
     "name": "ZeroDevi1"
   },
   "types": "./types/index.d.ts",
   "userConfig": {
-    "keepAlive": {
-      "type": "boolean",
-      "title": "缓存保活默认开启",
-      "description": "首次加载时保活开关的初始值；之后以状态栏里的开关为准。",
-      "default": false
-    },
     "keepAliveMinutes": {
       "type": "number",
       "title": "保活间隔（分钟）",

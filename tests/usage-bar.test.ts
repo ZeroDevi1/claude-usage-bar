@@ -154,8 +154,8 @@ test('模型请求的 usage 计入本会话累计', async ($, on) => {
 })
 
 test(
-  '保活：空闲时按间隔发送，到次数上限即停，新一轮对话开始时取消',
-  { options: { keepAlive: true, keepAliveMinutes: 1, keepAliveMaxPings: 2 } },
+  '保活：会话内手动开启后按间隔发送，到次数上限即停，新一轮对话开始时取消',
+  { options: { keepAliveMinutes: 1, keepAliveMaxPings: 2 } },
   async ($, on) => {
     const clock = mock.clock(on, { now: NOW })
     mock.store(on)
@@ -178,6 +178,17 @@ test(
       }
     })
     await $.session.start(START)
+
+    // 新会话默认关闭：空闲再久也不发
+    await $.turn.complete(TURN_END)
+    await clock.advance(180_000)
+    expect(forks).toBe(0)
+
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    await ui.press({ key: 'toggle' })
+    await ui.press({ key: 'keep' })
+    expect((await ui.find({ key: 'keep' }))?.props.label).toBe('Keep-alive: on')
+    await ui.unmount()
     await $.turn.complete(TURN_END)
 
     await clock.advance(59_000)

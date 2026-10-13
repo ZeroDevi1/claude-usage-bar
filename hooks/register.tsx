@@ -38,7 +38,7 @@ const clock = atom({ plugin: 'usage-bar', key: 'now' } as const, 0)
 
 const COMMAND = 'usage-bar'
 const HELP =
-  '/usage-bar：展开或收起卡片 · /usage-bar keepalive on|off：开关缓存保活 · /usage-bar ping：立即保活一次'
+  '/usage-bar：展开或收起卡片 · /usage-bar keepalive on|off：开关本会话的缓存保活 · /usage-bar ping：立即保活一次'
 
 /** 保活请求的提示词：只为让服务端读一遍已缓存的前缀，回复越短越省。 */
 const PING_PROMPT = 'Cache keep-alive ping. Reply with exactly: ok'
@@ -207,9 +207,9 @@ const ping = async ($: EngineInterface, isManual: boolean): Promise<string> => {
     : `保活成功，命中缓存 ${lastRead} token。`
 }
 
+/** 开关本会话的保活。开关只存在会话状态里：新会话默认关闭，各会话互不影响。 */
 const setKeep = async ($: EngineInterface, isOn: boolean): Promise<void> => {
   await update($, keep, k => ({ ...k, isOn, pings: 0, note: undefined }))
-  await $.store.set('keepOn', isOn)
   keepTimer?.cancel()
   if (isOn && !isBusy) arm($)
 }
@@ -233,10 +233,8 @@ export const register: Register = (on, options) => {
     })
     const savedView = await $.store.get('view')
     if (isView(savedView)) await update($, view, () => savedView)
-    const savedKeep = await $.store.get('keepOn')
-    const isOn =
-      typeof savedKeep === 'boolean' ? savedKeep : options.keepAlive === true
-    await update($, keep, k => ({ ...k, isOn }))
+    // 模块重载也会走到这里；会话状态里的保活开关还在，定时器要按它重新挂上
+    const { isOn } = await read($, keep)
     await applyUsage($, await $.session.usage())
 
     // 每分钟拨一次时钟，让倒计时在空闲时也往前走
@@ -320,8 +318,8 @@ export const register: Register = (on, options) => {
 
       return {
         text: isOn
-          ? `缓存保活已开启：空闲每 ${intervalMs / 60_000} 分钟一次，每轮最多 ${maxPings} 次。`
-          : '缓存保活已关闭。',
+          ? `本会话的缓存保活已开启：空闲每 ${intervalMs / 60_000} 分钟一次，每轮最多 ${maxPings} 次。`
+          : '本会话的缓存保活已关闭。',
       }
     }
     if (arg === 'ping') return { text: await ping($, true) }

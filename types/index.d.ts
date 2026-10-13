@@ -29,7 +29,7 @@ export type Live = {
   model?: string
 }
 
-/** 状态栏的显示偏好，同时写入 `$.store` 跨会话保留。 */
+/** 状态栏的显示偏好，同时写入 `$.store` 跨会话保留（保活开关不在其中）。 */
 export type View = {
   isExpanded: boolean
   tab: 'chart' | 'model'
@@ -61,7 +61,7 @@ export type Windows = {
   sevenDay: WindowStats | null
 }
 
-/** 缓存保活的状态。`pings` 在每轮对话结束时清零。 */
+/** 本会话的缓存保活状态，不跨会话保留。`pings` 在每轮对话结束时清零。 */
 export type Keep = {
   isOn: boolean
   pings: number
