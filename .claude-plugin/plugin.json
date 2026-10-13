@@ -1,0 +1,29 @@
+{
+  "name": "usage-bar",
+  "version": "0.1.0",
+  "description": "输入框上方的胶囊状态栏：上下文、5h/7d 限额、费用、token 与速度，可展开的窗口卡片，以及提示缓存保活。",
+  "author": {
+    "name": "ZeroDevi1"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "keepAlive": {
+      "type": "boolean",
+      "title": "缓存保活默认开启",
+      "description": "首次加载时保活开关的初始值；之后以状态栏里的开关为准。",
+      "default": false
+    },
+    "keepAliveMinutes": {
+      "type": "number",
+      "title": "保活间隔（分钟）",
+      "description": "空闲多久发一次保活请求。提示缓存 TTL 为 5 分钟时用 4.5；订阅账号的 1 小时 TTL 可设为 55。",
+      "default": 4.5
+    },
+    "keepAliveMaxPings": {
+      "type": "number",
+      "title": "每次空闲最多保活次数",
+      "description": "一轮对话结束后最多连续发几次保活请求，用完即停，直到下一轮对话。",
+      "default": 6
+    }
+  }
+}

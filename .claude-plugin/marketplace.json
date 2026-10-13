@@ -1,0 +1,6 @@
+{
+  "name": "claude-usage-bar",
+  "description": "usage-bar：Claude Code / Claude Desktop 输入框上方的用量胶囊状态栏与缓存保活。",
+  "owner": { "name": "ZeroDevi1" },
+  "plugins": [{ "name": "usage-bar", "source": "./" }]
+}
