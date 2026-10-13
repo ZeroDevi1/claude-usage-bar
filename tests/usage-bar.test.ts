@@ -97,14 +97,16 @@ test('状态栏在各表面都能画出，并能展开成卡片', async ($, on) 
   for (const surface of ['desktop', 'vscode'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     const pills = await ui.find({ type: 'Svg' })
-    expect(String(pills?.props.source)).toContain('>17%<')
-    expect(String(pills?.props.source)).toContain('>168.0k / 1M<')
-    expect(String(pills?.props.alt)).toContain('5h')
+    // 收起时只有 token 明细和费用，上下文与限额要展开才有
+    expect(String(pills?.props.source)).toContain('>$3.05<')
+    expect(String(pills?.props.source)).not.toContain('>17%<')
+    expect(String(pills?.props.alt)).not.toContain('5h')
     expect(await ui.find({ key: 'tab-chart' })).toBe(undefined)
 
     await ui.press({ key: 'toggle' })
-    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(2)
-    const cards = await ui.find({ type: 'Svg' })
+    const [cards, expanded] = await ui.findAll({ type: 'Svg' })
+    expect(String(expanded?.props.source)).toContain('>17%<')
+    expect(String(expanded?.props.alt)).toContain('5h')
     expect(String(cards?.props.source)).toContain('On pace to finish at')
     await ui.press({ key: 'tab-model' })
     expect(String((await ui.find({ type: 'Svg' }))?.props.source)).toContain('tokens left')
@@ -117,7 +119,11 @@ test('状态栏在各表面都能画出，并能展开成卡片', async ($, on) 
   }
 
   const terminal = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await terminal.find({ type: 'Text', text: /\$3\.05/ })).toBeDefined()
+  expect(await terminal.find({ type: 'Text', text: /51%/ })).toBe(undefined)
+  await terminal.press({ key: 'toggle' })
   expect(await terminal.find({ type: 'Text', text: /51%/ })).toBeDefined()
+  await terminal.press({ key: 'toggle' })
   await terminal.unmount()
 })
 

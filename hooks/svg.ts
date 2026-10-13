@@ -13,12 +13,9 @@ const PALETTE: Record<string, [string, string]> = {
   txt: ['#1A1A18', '#EDEDE8'],
   dim: ['#6B6A65', '#A3A29B'],
   track: ['#B9B8C4', '#5A5A60'],
-  fill: ['#8CB369', '#8CB369'],
   good: ['#1D8A5B', '#5DCAA5'],
   bad: ['#C8261B', '#F0766C'],
   prev: ['#9A9A95', '#77776F'],
-  ctxBg: ['#DCDDF6', '#2C2F5E'],
-  ctxFg: ['#3A4BD6', '#9AA5FF'],
   fiveBg: ['#D3E8DB', '#1F3D2E'],
   fiveFg: ['#1D6B4A', '#7FD1A6'],
   fiveLine: ['#1D8A5B', '#5DCAA5'],
@@ -27,8 +24,6 @@ const PALETTE: Record<string, [string, string]> = {
   sevenFg: ['#6B3FC4', '#B79CF2'],
   sevenLine: ['#6B4FD0', '#A590F0'],
   sevenHi: ['#ECE6F8', '#33285A'],
-  costBg: ['#F2E4C3', '#4A3A14'],
-  costFg: ['#B8860B', '#E7B94A'],
   inBg: ['#F8D9D6', '#4F2320'],
   inFg: ['#C0392B', '#F0928A'],
   outBg: ['#DCEFD2', '#24401C'],
@@ -46,10 +41,8 @@ const PALETTE: Record<string, [string, string]> = {
 }
 
 export type Tone =
-  | 'ctx'
   | 'five'
   | 'seven'
-  | 'cost'
   | 'in'
   | 'out'
   | 'speed'
@@ -59,11 +52,9 @@ export type Tone =
   | 'keep'
 
 type IconName =
-  | 'layers'
   | 'gauge'
   | 'calendar'
   | 'rewind'
-  | 'coin'
   | 'bolt'
   | 'doc'
   | 'pulse'
@@ -73,7 +64,6 @@ export type Seg =
   | { kind: 'icon'; name: IconName }
   | { kind: 'label'; text: string }
   | { kind: 'text'; text: string; isBold?: boolean; isAlert?: boolean }
-  | { kind: 'bar'; percent: number }
   | { kind: 'sep' }
 
 export type Pill = { tone: Tone; segs: Seg[] }
@@ -119,16 +109,12 @@ function icon(name: IconName, c: string): string {
   const s = `class="s-${c}" fill="none"`
   const f = `class="f-${c}" stroke="none"`
   switch (name) {
-    case 'layers':
-      return `<path ${f} d="M8 1.8 14.2 5 8 8.2 1.8 5Z"/><path ${s} d="M2 8.2 8 11.2l6-3M2 11.2l6 3 6-3"/>`
     case 'gauge':
       return `<path ${s} d="M2.6 11.5a5.8 5.8 0 1 1 10.8 0M8 9.6l2.8-3.6"/><circle ${f} cx="8" cy="9.6" r="1.1"/>`
     case 'calendar':
       return `<rect ${s} x="2.3" y="3.4" width="11.4" height="10.2" rx="2"/><path ${s} d="M2.3 6.8h11.4M5.4 1.8v3M10.6 1.8v3"/><circle ${f} cx="8" cy="10.2" r="1.1"/>`
     case 'rewind':
       return `<path ${s} d="M3 8a5 5 0 1 0 1.6-3.7M2.6 2.4v2.4H5M8 5.4V8l1.9 1.4"/>`
-    case 'coin':
-      return `<circle ${s} cx="8" cy="8" r="6"/><path ${s} d="M9.8 6.1c-.4-.6-1-.9-1.8-.9-1 0-1.8.5-1.8 1.3 0 2 3.6.9 3.6 2.9 0 .8-.8 1.3-1.8 1.3-.9 0-1.5-.3-1.9-.9M8 4.1v7.8"/>`
     case 'bolt':
       return `<path ${f} d="M9.2 1.2 3.4 9.1h3.9l-.9 5.7 5.9-8h-4z"/>`
     case 'doc':
@@ -138,18 +124,11 @@ function icon(name: IconName, c: string): string {
   }
 }
 
-type RowSize = {
-  /** 胶囊高度与等宽字号，px。 */
-  height: number
-  font: number
-  /** 同一行相邻胶囊的间距。 */
-  between: number
-}
-
-const SIZES: Record<'big' | 'compact', RowSize> = {
-  big: { height: 26, font: 12.5, between: 14 },
-  compact: { height: 20, font: 11, between: 6 },
-}
+/** 胶囊高度与等宽字号，px。 */
+const PILL_H = 20
+const PILL_FONT = 11
+/** 同一行相邻胶囊的间距。 */
+const PILL_BETWEEN = 6
 
 /** 灰底容器的内边距与行距。 */
 const INSET = 9
@@ -160,36 +139,28 @@ const MAX_WIDTH = 780
 /** 等宽字体的字宽与字号之比；文字用 textLength 钉死宽度，换了字体布局也不走样。 */
 const CHAR = 0.6
 
-function segWidth(seg: Seg, font: number): number {
+function segWidth(seg: Seg): number {
   switch (seg.kind) {
     case 'icon':
-      return font + 1.5
-    case 'bar':
-      return font * 3.1
+      return PILL_FONT + 1.5
     case 'sep':
       return 1
     default:
-      return seg.text.length * CHAR * font
+      return seg.text.length * CHAR * PILL_FONT
   }
 }
 
-function drawPill(pill: Pill, x: number, y: number, width: number, size: RowSize): string {
-  const { height, font } = size
+function drawPill(pill: Pill, x: number, y: number, width: number): string {
+  const height = PILL_H
+  const font = PILL_FONT
   const gap = font * 0.5
   const cy = y + height / 2
   let out = `<rect class="f-${pill.tone}Bg" x="${n(x)}" y="${n(y)}" width="${n(width)}" height="${height}" rx="${height / 2}"/>`
   let sx = x + font * 0.8
   for (const seg of pill.segs) {
-    const w = segWidth(seg, font)
+    const w = segWidth(seg)
     if (seg.kind === 'icon') {
       out += `<g transform="translate(${n(sx)} ${n(cy - w / 2)}) scale(${n(w / 16)})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icon(seg.name, `${pill.tone}Fg`)}</g>`
-    } else if (seg.kind === 'bar') {
-      const h = Math.max(3, font * 0.34)
-      const filled = (w * Math.min(100, Math.max(0, seg.percent))) / 100
-      out += `<rect class="f-track" opacity=".55" x="${n(sx)}" y="${n(cy - h / 2)}" width="${n(w)}" height="${n(h)}" rx="${n(h / 2)}"/>`
-      if (filled > 0) {
-        out += `<rect class="f-fill" x="${n(sx)}" y="${n(cy - h / 2)}" width="${n(Math.max(h, filled))}" height="${n(h)}" rx="${n(h / 2)}"/>`
-      }
     } else if (seg.kind === 'sep') {
       out += `<rect class="f-txt" opacity=".35" x="${n(sx)}" y="${n(cy - font * 0.55)}" width="1" height="${n(font * 1.1)}"/>`
     } else {
@@ -204,36 +175,28 @@ function drawPill(pill: Pill, x: number, y: number, width: number, size: RowSize
   return out
 }
 
-/** 一组胶囊及其尺寸；一个容器里可以叠几组。 */
-export type PillLine = { pills: Pill[]; size: 'big' | 'compact' }
-
-/** 灰底圆角容器里的若干行胶囊；每组从新行开始，排不下 MAX_WIDTH 时折行。 */
-export function pillsSvg(lines: PillLine[], theme: Theme): string {
+/** 灰底圆角容器里的一行胶囊，排不下 MAX_WIDTH 时折行。 */
+export function pillsSvg(pills: Pill[], theme: Theme): string {
+  const gap = PILL_FONT * 0.5
+  let x = INSET
   let y = INSET
   let widest = 0
   let body = ''
-  for (const line of lines) {
-    if (line.pills.length === 0) continue
-    const size = SIZES[line.size]
-    const gap = size.font * 0.5
-    let x = INSET
-    for (const pill of line.pills) {
-      const width =
-        pill.segs.reduce((sum, seg) => sum + segWidth(seg, size.font), 0) +
-        gap * (pill.segs.length - 1) +
-        size.font * 1.6
-      if (x > INSET && x + width > MAX_WIDTH - INSET) {
-        x = INSET
-        y += size.height + LINE_GAP
-      }
-      body += drawPill(pill, x, y, width, size)
-      widest = Math.max(widest, x + width)
-      x += width + size.between
+  for (const pill of pills) {
+    const width =
+      pill.segs.reduce((sum, seg) => sum + segWidth(seg), 0) +
+      gap * (pill.segs.length - 1) +
+      PILL_FONT * 1.6
+    if (x > INSET && x + width > MAX_WIDTH - INSET) {
+      x = INSET
+      y += PILL_H + LINE_GAP
     }
-    y += size.height + LINE_GAP
+    body += drawPill(pill, x, y, width)
+    widest = Math.max(widest, x + width)
+    x += width + PILL_BETWEEN
   }
   const width = widest + INSET
-  const height = y - LINE_GAP + INSET
+  const height = y + PILL_H + INSET
 
   return svg(
     width,
@@ -270,64 +233,9 @@ function keepPill(keep: Keep, maxPings: number): Pill {
   return { tone: 'keep', segs }
 }
 
-/** 收起时的一行：带进度条的上下文、5h、7d 胶囊和费用。 */
-export function bigPills(
-  live: Live,
-  keep: Keep,
-  now: number,
-  maxPings: number,
-): Pill[] {
-  const used = live.ctxTokens === undefined ? '—' : fmtTok(live.ctxTokens)
-  const pills: Pill[] = [
-    {
-      tone: 'ctx',
-      segs: [
-        { kind: 'icon', name: 'layers' },
-        { kind: 'bar', percent: live.ctxPercent ?? 0 },
-        percentSeg(live.ctxPercent),
-        { kind: 'sep' },
-        {
-          kind: 'text',
-          text: `${used} / ${live.ctxWindow > 0 ? fmtTok(live.ctxWindow, 'plain') : '—'}`,
-        },
-      ],
-    },
-  ]
-  for (const spec of LIMIT_PILLS) {
-    const limit = live.limits.find(one => one.kind === spec.kind)
-    if (limit === undefined) continue
-    const segs: Seg[] = [
-      { kind: 'icon', name: spec.icon },
-      { kind: 'label', text: spec.label },
-      { kind: 'bar', percent: limit.percentUsed },
-      percentSeg(limit.percentUsed),
-    ]
-    if (limit.resetsAt !== undefined) {
-      segs.push(
-        { kind: 'sep' },
-        { kind: 'icon', name: 'rewind' },
-        { kind: 'text', text: fmtDur(limit.resetsAt - now) },
-      )
-    }
-    pills.push({ tone: spec.tone, segs })
-  }
-  if (live.costUsd !== undefined) {
-    pills.push({
-      tone: 'cost',
-      segs: [
-        { kind: 'icon', name: 'coin' },
-        { kind: 'text', text: fmtUsd(live.costUsd) },
-      ],
-    })
-  }
-  if (keep.isOn) pills.push(keepPill(keep, maxPings))
-
-  return pills
-}
-
 /**
- * 本会话的 token 明细：in、out、速度、首字时间、缓存。
- * 速度和首字时间取最近一次模型请求；缓存胶囊依次是累计读取、累计写入、命中率。
+ * 本会话的 token 明细：in、out、速度、首字时间、缓存与费用。
+ * 速度和首字时间取最近一次模型请求；缓存胶囊依次是累计读取、累计写入、命中率、本会话费用。
  */
 export function detailPills(live: Live): Pill[] {
   // 会话状态可能是旧版本写下的，缺这两个字段时按 0 算
@@ -384,12 +292,27 @@ export function detailPills(live: Live): Pill[] {
       { kind: 'text', text: `${Math.round((read / input) * 100)}%` },
     )
   }
+  if (live.costUsd !== undefined) {
+    cache.push(
+      { kind: 'sep' },
+      { kind: 'label', text: 'cost' },
+      { kind: 'text', text: fmtUsd(live.costUsd) },
+    )
+  }
   pills.push({ tone: 'cache', segs: cache })
 
   return pills
 }
 
-/** 展开时卡片下面的胶囊：限额、token 明细、费用、上下文。 */
+/** 收起时的胶囊：token 明细（含费用）；上下文与限额只在展开后显示。 */
+export function collapsedPills(live: Live, keep: Keep, maxPings: number): Pill[] {
+  const pills = detailPills(live)
+  if (keep.isOn) pills.push(keepPill(keep, maxPings))
+
+  return pills
+}
+
+/** 展开时卡片下面的胶囊：限额、token 明细（含费用）、上下文。 */
 export function compactPills(
   live: Live,
   keep: Keep,
@@ -414,15 +337,6 @@ export function compactPills(
     pills.push({ tone: spec.tone, segs })
   }
   pills.push(...detailPills(live))
-  if (live.costUsd !== undefined) {
-    pills.push({
-      tone: 'cost',
-      segs: [
-        { kind: 'icon', name: 'coin' },
-        { kind: 'text', text: fmtUsd(live.costUsd) },
-      ],
-    })
-  }
   pills.push({
     tone: 'gray',
     segs: [

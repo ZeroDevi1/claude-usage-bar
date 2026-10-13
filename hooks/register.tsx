@@ -5,15 +5,14 @@ import type { Limit, Mix, View } from '../types'
 import { addSamples, addUsage, asHistory, asLedger, summarize } from './ledger'
 import { OPUS } from './pricing'
 import {
-  bigPills,
   cardsSvg,
+  collapsedPills,
   compactPills,
-  detailPills,
   pillsSvg,
   toneColors,
   windowLines,
 } from './svg'
-import type { Pill, PillLine } from './svg'
+import type { Pill } from './svg'
 
 const live = atom({ plugin: 'usage-bar', key: 'live' } as const, {
   ctxWindow: 0,
@@ -359,14 +358,10 @@ export const register: Register = (on, options) => {
     ])
     // session.start 之前就被要求绘制时时钟还是 0，退回本地时间
     const now = ticked || Date.now()
-    // 收起：带进度条的一行加 token 明细一行；展开：卡片下面一组紧凑胶囊
-    const lines: PillLine[] = look.isExpanded
-      ? [{ pills: compactPills(figures, keeping, now, maxPings), size: 'compact' }]
-      : [
-          { pills: bigPills(figures, keeping, now, maxPings), size: 'big' },
-          { pills: detailPills(figures), size: 'compact' },
-        ]
-    const pills = lines.flatMap(line => line.pills)
+    // 收起：token 明细和费用；展开：卡片下面再加上限额与上下文
+    const pills = look.isExpanded
+      ? compactPills(figures, keeping, now, maxPings)
+      : collapsedPills(figures, keeping, maxPings)
     const toggle = (): Promise<void> =>
       setView($, v => ({ ...v, isExpanded: !v.isExpanded }))
     const keepLabel = `Keep-alive: ${keeping.isOn ? 'on' : 'off'}`
@@ -447,7 +442,7 @@ export const register: Register = (on, options) => {
         )}
         <Box flexDirection="row" columnGap={1} alignItems="center">
           <Svg
-            source={pillsSvg(lines, look.theme)}
+            source={pillsSvg(pills, look.theme)}
             alt={pills.map(pillText).join(' · ')}
           />
           <Button key="toggle" label={look.isExpanded ? '📉' : '📈'} onPress={toggle} />
@@ -457,7 +452,7 @@ export const register: Register = (on, options) => {
   })
 }
 
-/** 胶囊的纯文字形式：图标略去，进度条用方块字符。 */
+/** 胶囊的纯文字形式：图标略去。 */
 function pillText(pill: Pill): string {
   return pill.segs
     .map(seg => {
@@ -466,11 +461,6 @@ function pillText(pill: Pill): string {
           return ''
         case 'sep':
           return '│'
-        case 'bar': {
-          const filled = Math.round(Math.min(100, Math.max(0, seg.percent)) / 12.5)
-
-          return '█'.repeat(filled) + '░'.repeat(8 - filled)
-        }
         default:
           return seg.text
       }
