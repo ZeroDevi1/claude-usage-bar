@@ -1,5 +1,5 @@
 import type { Keep, Live, Point, View, WindowStats, Windows } from '../types'
-import { fmtDur, fmtMs, fmtPct, fmtRate, fmtTok, fmtUsd } from './format'
+import { fmtDur, fmtMs, fmtRate, fmtTok, fmtUsd } from './format'
 import { pace, valueAt } from './ledger'
 import { blendedPrice, MODEL_ROWS, OPUS } from './pricing'
 
@@ -51,13 +51,10 @@ type IconName =
 export type Seg =
   | { kind: 'icon'; name: IconName }
   | { kind: 'label'; text: string }
-  | { kind: 'text'; text: string; isBold?: boolean; isAlert?: boolean }
+  | { kind: 'text'; text: string; isAlert?: boolean }
   | { kind: 'sep' }
 
 export type Pill = { tone: Tone; segs: Seg[] }
-
-/** 百分比达到这个值时数字转红。 */
-const ALERT_PERCENT = 80
 
 /** 终端没有 SVG，用浅色表里的同一组颜色给文字上底色。 */
 export function toneColors(tone: Tone): { bg: string; fg: string; text: string } {
@@ -148,8 +145,7 @@ function drawPill(pill: Pill, x: number, y: number, width: number): string {
     } else {
       const color =
         seg.kind === 'label' ? `${pill.tone}Fg` : seg.isAlert ? 'bad' : 'txt'
-      const weight = seg.kind === 'text' && seg.isBold ? ' font-weight="700"' : ''
-      out += `<text class="mono f-${color}" x="${n(sx)}" y="${n(cy + font * 0.35)}" font-size="${font}"${weight} textLength="${n(w)}" lengthAdjust="spacingAndGlyphs">${esc(seg.text)}</text>`
+      out += `<text class="mono f-${color}" x="${n(sx)}" y="${n(cy + font * 0.35)}" font-size="${font}" textLength="${n(w)}" lengthAdjust="spacingAndGlyphs">${esc(seg.text)}</text>`
     }
     sx += w + gap
   }
@@ -188,15 +184,6 @@ export function pillsSvg(pills: Pill[], theme: Theme): string {
   )
 }
 
-function percentSeg(percent: number | undefined): Seg {
-  return {
-    kind: 'text',
-    text: fmtPct(percent),
-    isBold: true,
-    isAlert: (percent ?? 0) >= ALERT_PERCENT,
-  }
-}
-
 function keepPill(keep: Keep, maxPings: number): Pill {
   const segs: Seg[] = [
     { kind: 'icon', name: 'pulse' },
@@ -213,14 +200,8 @@ function keepPill(keep: Keep, maxPings: number): Pill {
 /**
  * 状态栏的一行胶囊：in、out、速度、首字时间、缓存与费用，保活开启时再加 keep。
  * 速度和首字时间取最近一次模型请求；缓存胶囊依次是累计读取、累计写入、命中率、本会话费用。
- * @param isExpanded 卡片展开时在缓存胶囊末尾加上下文占用；限额只在卡片里显示。
  */
-export function statusPills(
-  live: Live,
-  keep: Keep,
-  maxPings: number,
-  isExpanded: boolean,
-): Pill[] {
+export function statusPills(live: Live, keep: Keep, maxPings: number): Pill[] {
   // 会话状态可能是旧版本写下的，缺这两个字段时按 0 算
   const read = live.tokRead || 0
   const write = live.tokWrite || 0
@@ -281,9 +262,6 @@ export function statusPills(
       { kind: 'label', text: 'cost' },
       { kind: 'text', text: fmtUsd(live.costUsd) },
     )
-  }
-  if (isExpanded) {
-    cache.push({ kind: 'sep' }, { kind: 'label', text: 'ctx' }, percentSeg(live.ctxPercent))
   }
   pills.push({ tone: 'cache', segs: cache })
   if (keep.isOn) pills.push(keepPill(keep, maxPings))

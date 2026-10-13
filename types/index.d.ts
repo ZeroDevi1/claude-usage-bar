@@ -13,10 +13,6 @@ export type Limit = {
 
 /** 本会话的实时数字，来自 `session.measure` 与每次模型请求的 usage。 */
 export type Live = {
-  ctxTokens?: number
-  /** 上下文窗口大小（token）；0 表示尚无读数。 */
-  ctxWindow: number
-  ctxPercent?: number
   limits: Limit[]
   costUsd?: number
   /** 本会话累计：未缓存输入、输出、缓存读、缓存写。 */

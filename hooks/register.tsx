@@ -14,7 +14,6 @@ import {
 import type { Pill } from './svg'
 
 const live = atom({ plugin: 'usage-bar', key: 'live' } as const, {
-  ctxWindow: 0,
   limits: [],
   tokIn: 0,
   tokOut: 0,
@@ -95,10 +94,10 @@ const refresh = async ($: EngineInterface): Promise<void> => {
   await update($, clock, () => now)
 }
 
-/** 接收引擎的一次度量：上下文、限额窗口、费用。 */
+/** 接收引擎的一次度量：限额窗口、费用。 */
 const applyUsage = async (
   $: EngineInterface,
-  usage: Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>,
+  usage: Pick<SessionUsage, 'rateLimits' | 'cost'>,
 ): Promise<void> => {
   const limits: Limit[] = usage.rateLimits.map(one => {
     const resetsAt = one.resetsAt === undefined ? NaN : Date.parse(one.resetsAt)
@@ -111,9 +110,6 @@ const applyUsage = async (
   })
   await update($, live, v => ({
     ...v,
-    ctxTokens: usage.context.tokens,
-    ctxWindow: usage.context.window,
-    ctxPercent: usage.context.percent,
     limits,
     costUsd: usage.cost?.usd ?? v.costUsd,
   }))
@@ -357,7 +353,7 @@ export const register: Register = (on, options) => {
     ])
     // session.start 之前就被要求绘制时时钟还是 0，退回本地时间
     const now = ticked || Date.now()
-    const pills = statusPills(figures, keeping, maxPings, look.isExpanded)
+    const pills = statusPills(figures, keeping, maxPings)
     const toggle = (): Promise<void> =>
       setView($, v => ({ ...v, isExpanded: !v.isExpanded }))
     const keepLabel = `Keep-alive: ${keeping.isOn ? 'on' : 'off'}`

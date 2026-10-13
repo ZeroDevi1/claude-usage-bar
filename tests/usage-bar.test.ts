@@ -97,17 +97,14 @@ test('状态栏在各表面都能画出，并能展开成卡片', async ($, on) 
   for (const surface of ['desktop', 'vscode'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     const pills = await ui.find({ type: 'Svg' })
-    // 收起时只有 token 明细和费用；展开后多出上下文，限额只在卡片里
+    // 胶囊行只有 token 明细和费用，展开与否都一样；上下文不显示，限额只在卡片里
     expect(String(pills?.props.source)).toContain('>$3.05<')
     expect(String(pills?.props.source)).not.toContain('>17%<')
-    expect(String(pills?.props.alt)).not.toContain('ctx')
     expect(await ui.find({ key: 'tab-chart' })).toBe(undefined)
 
     await ui.press({ key: 'toggle' })
     const [cards, expanded] = await ui.findAll({ type: 'Svg' })
-    expect(String(expanded?.props.source)).toContain('>17%<')
-    expect(String(expanded?.props.alt)).toContain('ctx')
-    expect(String(expanded?.props.alt)).not.toContain('5h')
+    expect(expanded?.props.source).toBe(pills?.props.source)
     // 一行胶囊高 20，上下各留 9；折成两行时高度会变成 65
     expect(String(expanded?.props.source)).toContain('height="38"')
     expect(String(cards?.props.source)).toContain('On pace to finish at')
