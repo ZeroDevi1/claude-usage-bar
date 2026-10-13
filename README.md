@@ -46,8 +46,6 @@ Claude Desktop 的 Code 标签页里不能运行 `/plugin`，所以安装要在�
 
 3. 回到 Claude Desktop，在 Code 标签页**新开一个会话**，状态栏出现在输入框上方。已经打开的会话不会补加载。
 
-仓库是私有的，那台机器的 git 需要能访问它（例如先执行 `gh auth login`）。
-
 也可以不进交互界面，直接用命令行安装：
 
 ```bash
