@@ -1,6 +1,6 @@
 {
   "name": "usage-bar",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "输入框上方的胶囊状态栏：上下文、5h/7d 限额、费用、token 与速度，可展开的窗口卡片，以及提示缓存保活。",
   "author": {
     "name": "ZeroDevi1"

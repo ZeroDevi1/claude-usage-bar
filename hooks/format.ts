@@ -6,18 +6,29 @@ const UNITS: [number, string][] = [
 
 /**
  * token 数的短写法。
- * @param style `full`：`168.0k`、`4.81M`；`compact`：`645k`、`137M`；`plain`：整数不带小数（`1M`）。
+ * @param style `full`：`168.0k`、`4.81M`；`compact`：`645k`、`137M`；`plain`：整数不带小数（`1M`）；
+ *   `pill`：k 一位、M 及以上两位（`195.5k`、`23.38M`）。
  */
 export function fmtTok(
   n: number,
-  style: 'full' | 'compact' | 'plain' = 'full',
+  style: 'full' | 'compact' | 'plain' | 'pill' = 'full',
 ): string {
   for (const [size, unit] of UNITS) {
     if (n < size) continue
     const v = n / size
     if (style === 'plain' && Number.isInteger(v)) return `${v}${unit}`
     const digits =
-      style === 'compact' ? (v >= 100 ? 0 : 1) : v >= 10 ? 1 : 2
+      style === 'pill'
+        ? unit === 'k'
+          ? 1
+          : 2
+        : style === 'compact'
+          ? v >= 100
+            ? 0
+            : 1
+          : v >= 10
+            ? 1
+            : 2
 
     return `${v.toFixed(digits)}${unit}`
   }
@@ -52,6 +63,11 @@ export function fmtDur(ms: number, sep = ' '): string {
   if (h > 0) return `${h}h${sep}${m}m`
 
   return `${m}m`
+}
+
+/** 首字时间这类短时长：一秒以内写毫秒，以上写一位小数的秒。 */
+export function fmtMs(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
 export function fmtPct(n: number | undefined): string {

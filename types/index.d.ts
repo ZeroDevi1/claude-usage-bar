@@ -19,12 +19,15 @@ export type Live = {
   ctxPercent?: number
   limits: Limit[]
   costUsd?: number
-  /** 本会话累计：未缓存输入、输出、缓存读写之和。 */
+  /** 本会话累计：未缓存输入、输出、缓存读、缓存写。 */
   tokIn: number
   tokOut: number
-  tokCache: number
-  /** 最近一次模型请求的输出速度，token/秒。 */
+  tokRead: number
+  tokWrite: number
+  /** 最近一次模型请求的输出速度，token/秒：输出量除以首个内容块到结束的时长。 */
   speed?: number
+  /** 最近一次模型请求的首字时间：从发出请求到收到首个内容块，毫秒。 */
+  ttftMs?: number
   /** 最近一次应答的模型 id，保活请求按它计价。 */
   model?: string
 }

@@ -8,18 +8,20 @@ import {
   bigPills,
   cardsSvg,
   compactPills,
+  detailPills,
   pillsSvg,
   toneColors,
   windowLines,
 } from './svg'
-import type { Pill } from './svg'
+import type { Pill, PillLine } from './svg'
 
 const live = atom({ plugin: 'usage-bar', key: 'live' } as const, {
   ctxWindow: 0,
   limits: [],
   tokIn: 0,
   tokOut: 0,
-  tokCache: 0,
+  tokRead: 0,
+  tokWrite: 0,
 })
 const view = atom({ plugin: 'usage-bar', key: 'view' } as const, {
   isExpanded: false,
@@ -123,26 +125,36 @@ const applyUsage = async (
   await refresh($)
 }
 
+/** 一次流式请求的计时。没有收到任何内容块（请求失败、被打断）时两项都缺省。 */
+type Timing = {
+  /** 首字时间：发出请求到首个内容块。 */
+  ttftMs?: number
+  /** 生成时长：首个内容块到流结束。 */
+  genMs?: number
+}
+
 /**
  * 把一次模型调用记入本会话累计和跨会话账本。
- * @param elapsedMs 请求耗时；给出且足够长时更新速度。
+ * @param timing 流式请求的计时；生成时长足够长时更新速度。保活请求不传，不影响这两项读数。
  */
 const account = async (
   $: EngineInterface,
   model: string,
   mix: Mix,
-  elapsedMs?: number,
+  timing: Timing = {},
 ): Promise<void> => {
+  const { genMs, ttftMs } = timing
   const isTimed =
-    elapsedMs !== undefined &&
-    elapsedMs >= MIN_SPEED_MS &&
-    mix[1] >= MIN_SPEED_TOKENS
+    genMs !== undefined && genMs >= MIN_SPEED_MS && mix[1] >= MIN_SPEED_TOKENS
   await update($, live, v => ({
     ...v,
     tokIn: v.tokIn + mix[0],
     tokOut: v.tokOut + mix[1],
-    tokCache: v.tokCache + mix[2] + mix[3],
-    speed: isTimed ? mix[1] / (elapsedMs / 1000) : v.speed,
+    // 会话状态可能是旧版本写下的，缺这两个字段时从 0 起算
+    tokRead: (v.tokRead || 0) + mix[2],
+    tokWrite: (v.tokWrite || 0) + mix[3],
+    speed: isTimed ? mix[1] / (genMs / 1000) : v.speed,
+    ttftMs: ttftMs ?? v.ttftMs,
     model,
   }))
   // 读改写之间没有锁：两个会话同时写时后写的会盖掉先写的那一笔，估值因此略偏低
@@ -284,8 +296,15 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.step', async function* ($, e, next) {
+    // 逐块转交并记下首个内容块的时刻；engine 块是信封和标记，不算内容
     const startedAt = Date.now()
-    const response = yield* next(e)
+    let firstAt: number | undefined
+    const stream = next(e)
+    for await (const chunk of stream) {
+      if (firstAt === undefined && chunk.kind !== 'engine') firstAt = Date.now()
+      yield chunk
+    }
+    const response = await stream.result
     const { usage } = response
     if (usage !== null) {
       // 不等记账完成就把应答交还引擎；记账失败只留一行日志
@@ -298,7 +317,9 @@ export const register: Register = (on, options) => {
           usage.cache_read_input_tokens,
           usage.cache_creation_input_tokens,
         ],
-        Date.now() - startedAt,
+        firstAt === undefined
+          ? {}
+          : { ttftMs: firstAt - startedAt, genMs: Date.now() - firstAt },
       ).catch(err => report($, err))
     }
 
@@ -338,9 +359,14 @@ export const register: Register = (on, options) => {
     ])
     // session.start 之前就被要求绘制时时钟还是 0，退回本地时间
     const now = ticked || Date.now()
-    const pills = look.isExpanded
-      ? compactPills(figures, keeping, now, maxPings)
-      : bigPills(figures, keeping, now, maxPings)
+    // 收起：带进度条的一行加 token 明细一行；展开：卡片下面一组紧凑胶囊
+    const lines: PillLine[] = look.isExpanded
+      ? [{ pills: compactPills(figures, keeping, now, maxPings), size: 'compact' }]
+      : [
+          { pills: bigPills(figures, keeping, now, maxPings), size: 'big' },
+          { pills: detailPills(figures), size: 'compact' },
+        ]
+    const pills = lines.flatMap(line => line.pills)
     const toggle = (): Promise<void> =>
       setView($, v => ({ ...v, isExpanded: !v.isExpanded }))
     const keepLabel = `Keep-alive: ${keeping.isOn ? 'on' : 'off'}`
@@ -421,7 +447,7 @@ export const register: Register = (on, options) => {
         )}
         <Box flexDirection="row" columnGap={1} alignItems="center">
           <Svg
-            source={pillsSvg(pills, look.isExpanded ? 'compact' : 'big', look.theme)}
+            source={pillsSvg(lines, look.theme)}
             alt={pills.map(pillText).join(' · ')}
           />
           <Button key="toggle" label={look.isExpanded ? '📉' : '📈'} onPress={toggle} />

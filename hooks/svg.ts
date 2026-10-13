@@ -1,5 +1,5 @@
 import type { Keep, Live, Point, View, WindowStats, Windows } from '../types'
-import { fmtDur, fmtPct, fmtRate, fmtTok, fmtUsd } from './format'
+import { fmtDur, fmtMs, fmtPct, fmtRate, fmtTok, fmtUsd } from './format'
 import { pace, valueAt } from './ledger'
 import { blendedPrice, MODEL_ROWS, OPUS } from './pricing'
 
@@ -35,6 +35,8 @@ const PALETTE: Record<string, [string, string]> = {
   outFg: ['#3B8A2E', '#93D07F'],
   speedBg: ['#D2E8F6', '#173A52'],
   speedFg: ['#1E7FC2', '#7CC0EE'],
+  ttftBg: ['#D0EEEA', '#123F3A'],
+  ttftFg: ['#0F7B6C', '#6FD0C2'],
   cacheBg: ['#DADFF8', '#262C5C'],
   cacheFg: ['#3A4BD6', '#9AA5FF'],
   grayBg: ['#E2E2E8', '#3A3A40'],
@@ -51,6 +53,7 @@ export type Tone =
   | 'in'
   | 'out'
   | 'speed'
+  | 'ttft'
   | 'cache'
   | 'gray'
   | 'keep'
@@ -139,12 +142,20 @@ type RowSize = {
   /** 胶囊高度与等宽字号，px。 */
   height: number
   font: number
-  /** 外层灰底容器的内边距；0 表示不画容器。 */
-  inset: number
+  /** 同一行相邻胶囊的间距。 */
+  between: number
 }
 
-const BIG: RowSize = { height: 26, font: 12.5, inset: 9 }
-const COMPACT: RowSize = { height: 20, font: 11, inset: 0 }
+const SIZES: Record<'big' | 'compact', RowSize> = {
+  big: { height: 26, font: 12.5, between: 14 },
+  compact: { height: 20, font: 11, between: 6 },
+}
+
+/** 灰底容器的内边距与行距。 */
+const INSET = 9
+const LINE_GAP = 7
+/** 一行排不下时折行的宽度上限；再宽就会被界面整体缩小，字看不清。 */
+const MAX_WIDTH = 780
 
 /** 等宽字体的字宽与字号之比；文字用 textLength 钉死宽度，换了字体布局也不走样。 */
 const CHAR = 0.6
@@ -162,60 +173,74 @@ function segWidth(seg: Seg, font: number): number {
   }
 }
 
-/** 一行圆角胶囊，从左到右排开；宽度由内容决定。 */
-export function pillsSvg(
-  pills: Pill[],
-  size: 'big' | 'compact',
-  theme: Theme,
-): string {
-  const { height, font, inset } = size === 'big' ? BIG : COMPACT
+function drawPill(pill: Pill, x: number, y: number, width: number, size: RowSize): string {
+  const { height, font } = size
   const gap = font * 0.5
-  const padX = font * 0.8
-  const cy = inset + height / 2
-  let x = inset
-  let body = ''
-  for (const pill of pills) {
-    const inner =
-      pill.segs.reduce((sum, seg) => sum + segWidth(seg, font), 0) +
-      gap * (pill.segs.length - 1)
-    const width = inner + padX * 2
-    body += `<rect class="f-${pill.tone}Bg" x="${n(x)}" y="${n(inset)}" width="${n(width)}" height="${height}" rx="${height / 2}"/>`
-    let sx = x + padX
-    for (const seg of pill.segs) {
-      const w = segWidth(seg, font)
-      if (seg.kind === 'icon') {
-        body += `<g transform="translate(${n(sx)} ${n(cy - w / 2)}) scale(${n(w / 16)})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icon(seg.name, `${pill.tone}Fg`)}</g>`
-      } else if (seg.kind === 'bar') {
-        const h = Math.max(3, font * 0.34)
-        const filled = (w * Math.min(100, Math.max(0, seg.percent))) / 100
-        body += `<rect class="f-track" opacity=".55" x="${n(sx)}" y="${n(cy - h / 2)}" width="${n(w)}" height="${n(h)}" rx="${n(h / 2)}"/>`
-        if (filled > 0) {
-          body += `<rect class="f-fill" x="${n(sx)}" y="${n(cy - h / 2)}" width="${n(Math.max(h, filled))}" height="${n(h)}" rx="${n(h / 2)}"/>`
-        }
-      } else if (seg.kind === 'sep') {
-        body += `<rect class="f-txt" opacity=".35" x="${n(sx)}" y="${n(cy - font * 0.55)}" width="1" height="${n(font * 1.1)}"/>`
-      } else {
-        const color =
-          seg.kind === 'label'
-            ? `${pill.tone}Fg`
-            : seg.isAlert
-              ? 'bad'
-              : 'txt'
-        const weight = seg.kind === 'text' && seg.isBold ? ' font-weight="700"' : ''
-        body += `<text class="mono f-${color}" x="${n(sx)}" y="${n(cy + font * 0.35)}" font-size="${font}"${weight} textLength="${n(w)}" lengthAdjust="spacingAndGlyphs">${esc(seg.text)}</text>`
+  const cy = y + height / 2
+  let out = `<rect class="f-${pill.tone}Bg" x="${n(x)}" y="${n(y)}" width="${n(width)}" height="${height}" rx="${height / 2}"/>`
+  let sx = x + font * 0.8
+  for (const seg of pill.segs) {
+    const w = segWidth(seg, font)
+    if (seg.kind === 'icon') {
+      out += `<g transform="translate(${n(sx)} ${n(cy - w / 2)}) scale(${n(w / 16)})" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icon(seg.name, `${pill.tone}Fg`)}</g>`
+    } else if (seg.kind === 'bar') {
+      const h = Math.max(3, font * 0.34)
+      const filled = (w * Math.min(100, Math.max(0, seg.percent))) / 100
+      out += `<rect class="f-track" opacity=".55" x="${n(sx)}" y="${n(cy - h / 2)}" width="${n(w)}" height="${n(h)}" rx="${n(h / 2)}"/>`
+      if (filled > 0) {
+        out += `<rect class="f-fill" x="${n(sx)}" y="${n(cy - h / 2)}" width="${n(Math.max(h, filled))}" height="${n(h)}" rx="${n(h / 2)}"/>`
       }
-      sx += w + gap
+    } else if (seg.kind === 'sep') {
+      out += `<rect class="f-txt" opacity=".35" x="${n(sx)}" y="${n(cy - font * 0.55)}" width="1" height="${n(font * 1.1)}"/>`
+    } else {
+      const color =
+        seg.kind === 'label' ? `${pill.tone}Fg` : seg.isAlert ? 'bad' : 'txt'
+      const weight = seg.kind === 'text' && seg.isBold ? ' font-weight="700"' : ''
+      out += `<text class="mono f-${color}" x="${n(sx)}" y="${n(cy + font * 0.35)}" font-size="${font}"${weight} textLength="${n(w)}" lengthAdjust="spacingAndGlyphs">${esc(seg.text)}</text>`
     }
-    x += width + (size === 'big' ? 14 : 6)
+    sx += w + gap
   }
-  const width = x - (size === 'big' ? 14 : 6) + inset
-  const total = height + inset * 2
-  const band =
-    inset > 0
-      ? `<rect class="f-band" width="${n(width)}" height="${total}" rx="10"/>`
-      : ''
 
-  return svg(width, total, theme, band + body)
+  return out
+}
+
+/** 一组胶囊及其尺寸；一个容器里可以叠几组。 */
+export type PillLine = { pills: Pill[]; size: 'big' | 'compact' }
+
+/** 灰底圆角容器里的若干行胶囊；每组从新行开始，排不下 MAX_WIDTH 时折行。 */
+export function pillsSvg(lines: PillLine[], theme: Theme): string {
+  let y = INSET
+  let widest = 0
+  let body = ''
+  for (const line of lines) {
+    if (line.pills.length === 0) continue
+    const size = SIZES[line.size]
+    const gap = size.font * 0.5
+    let x = INSET
+    for (const pill of line.pills) {
+      const width =
+        pill.segs.reduce((sum, seg) => sum + segWidth(seg, size.font), 0) +
+        gap * (pill.segs.length - 1) +
+        size.font * 1.6
+      if (x > INSET && x + width > MAX_WIDTH - INSET) {
+        x = INSET
+        y += size.height + LINE_GAP
+      }
+      body += drawPill(pill, x, y, width, size)
+      widest = Math.max(widest, x + width)
+      x += width + size.between
+    }
+    y += size.height + LINE_GAP
+  }
+  const width = widest + INSET
+  const height = y - LINE_GAP + INSET
+
+  return svg(
+    width,
+    height,
+    theme,
+    `<rect class="f-band" width="${n(width)}" height="${n(height)}" rx="10"/>${body}`,
+  )
 }
 
 const LIMIT_PILLS: { kind: string; label: string; tone: Tone; icon: IconName }[] = [
@@ -300,7 +325,71 @@ export function bigPills(
   return pills
 }
 
-/** 展开时卡片下面的一行：限额、in/out、速度、缓存、费用、上下文。 */
+/**
+ * 本会话的 token 明细：in、out、速度、首字时间、缓存。
+ * 速度和首字时间取最近一次模型请求；缓存胶囊依次是累计读取、累计写入、命中率。
+ */
+export function detailPills(live: Live): Pill[] {
+  // 会话状态可能是旧版本写下的，缺这两个字段时按 0 算
+  const read = live.tokRead || 0
+  const write = live.tokWrite || 0
+  const pills: Pill[] = [
+    {
+      tone: 'in',
+      segs: [
+        { kind: 'label', text: 'in' },
+        { kind: 'text', text: fmtTok(live.tokIn, 'pill') },
+      ],
+    },
+    {
+      tone: 'out',
+      segs: [
+        { kind: 'label', text: 'out' },
+        { kind: 'text', text: fmtTok(live.tokOut, 'pill') },
+      ],
+    },
+  ]
+  if (live.speed !== undefined) {
+    pills.push({
+      tone: 'speed',
+      segs: [
+        { kind: 'icon', name: 'bolt' },
+        { kind: 'text', text: `~${Math.round(live.speed)} t/s` },
+      ],
+    })
+  }
+  if (live.ttftMs !== undefined) {
+    pills.push({
+      tone: 'ttft',
+      segs: [
+        { kind: 'icon', name: 'rewind' },
+        { kind: 'label', text: 'ttft' },
+        { kind: 'text', text: fmtMs(live.ttftMs) },
+      ],
+    })
+  }
+  const cache: Seg[] = [
+    { kind: 'label', text: 'cache' },
+    { kind: 'text', text: fmtTok(read, 'pill') },
+    { kind: 'sep' },
+    { kind: 'label', text: 'write' },
+    { kind: 'text', text: fmtTok(write, 'pill') },
+  ]
+  // 命中率：输入侧 token 里由缓存提供的比例
+  const input = live.tokIn + read + write
+  if (input > 0) {
+    cache.push(
+      { kind: 'sep' },
+      { kind: 'label', text: 'hit' },
+      { kind: 'text', text: `${Math.round((read / input) * 100)}%` },
+    )
+  }
+  pills.push({ tone: 'cache', segs: cache })
+
+  return pills
+}
+
+/** 展开时卡片下面的胶囊：限额、token 明细、费用、上下文。 */
 export function compactPills(
   live: Live,
   keep: Keep,
@@ -324,38 +413,7 @@ export function compactPills(
     }
     pills.push({ tone: spec.tone, segs })
   }
-  pills.push(
-    {
-      tone: 'in',
-      segs: [
-        { kind: 'label', text: 'in' },
-        { kind: 'text', text: fmtTok(live.tokIn, 'compact') },
-      ],
-    },
-    {
-      tone: 'out',
-      segs: [
-        { kind: 'label', text: 'out' },
-        { kind: 'text', text: fmtTok(live.tokOut, 'compact') },
-      ],
-    },
-  )
-  if (live.speed !== undefined) {
-    pills.push({
-      tone: 'speed',
-      segs: [
-        { kind: 'icon', name: 'bolt' },
-        { kind: 'text', text: `${Math.round(live.speed)} t/s` },
-      ],
-    })
-  }
-  pills.push({
-    tone: 'cache',
-    segs: [
-      { kind: 'label', text: 'cache' },
-      { kind: 'text', text: fmtTok(live.tokCache, 'compact') },
-    ],
-  })
+  pills.push(...detailPills(live))
   if (live.costUsd !== undefined) {
     pills.push({
       tone: 'cost',

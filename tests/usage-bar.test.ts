@@ -121,11 +121,13 @@ test('状态栏在各表面都能画出，并能展开成卡片', async ($, on) 
   await terminal.unmount()
 })
 
-test('模型请求的 usage 计入本会话累计', async ($, on) => {
+test('模型请求的 usage 计入本会话累计，并记下首字时间', async ($, on) => {
   mock.clock(on, { now: NOW })
   mock.store(on)
   answerEngine(on)
   on('turn.step', async function* (_, e) {
+    yield { kind: 'text', index: 0, text: 'ok' }
+
     return {
       turnId: e.turnId,
       index: e.index,
@@ -137,7 +139,7 @@ test('模型请求的 usage 计入本会话累计', async ($, on) => {
         input_tokens: 586,
         output_tokens: 645_000,
         cache_read_input_tokens: 137_000_000,
-        cache_creation_input_tokens: 0,
+        cache_creation_input_tokens: 3_000_000,
       },
     }
   })
@@ -148,8 +150,12 @@ test('模型请求的 usage 计入本会话累计', async ($, on) => {
   await ui.press({ key: 'toggle' })
   const source = String((await ui.findAll({ type: 'Svg' }))[1]?.props.source)
   expect(source).toContain('>586<')
-  expect(source).toContain('>645k<')
-  expect(source).toContain('>137M<')
+  expect(source).toContain('>645.0k<')
+  expect(source).toContain('>137.00M<')
+  expect(source).toContain('>3.00M<')
+  // 命中率 = 137M ÷ (586 + 137M + 3M)
+  expect(source).toContain('>98%<')
+  expect(source).toContain('>ttft<')
   await ui.unmount()
 })
 
