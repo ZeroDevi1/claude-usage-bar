@@ -6,9 +6,8 @@ import { addSamples, addUsage, asHistory, asLedger, summarize } from './ledger'
 import { OPUS } from './pricing'
 import {
   cardsSvg,
-  collapsedPills,
-  compactPills,
   pillsSvg,
+  statusPills,
   toneColors,
   windowLines,
 } from './svg'
@@ -358,10 +357,7 @@ export const register: Register = (on, options) => {
     ])
     // session.start 之前就被要求绘制时时钟还是 0，退回本地时间
     const now = ticked || Date.now()
-    // 收起：token 明细和费用；展开：卡片下面再加上限额与上下文
-    const pills = look.isExpanded
-      ? compactPills(figures, keeping, now, maxPings)
-      : collapsedPills(figures, keeping, maxPings)
+    const pills = statusPills(figures, keeping, maxPings, look.isExpanded)
     const toggle = (): Promise<void> =>
       setView($, v => ({ ...v, isExpanded: !v.isExpanded }))
     const keepLabel = `Keep-alive: ${keeping.isOn ? 'on' : 'off'}`

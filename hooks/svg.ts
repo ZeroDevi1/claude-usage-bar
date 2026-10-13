@@ -16,12 +16,8 @@ const PALETTE: Record<string, [string, string]> = {
   good: ['#1D8A5B', '#5DCAA5'],
   bad: ['#C8261B', '#F0766C'],
   prev: ['#9A9A95', '#77776F'],
-  fiveBg: ['#D3E8DB', '#1F3D2E'],
-  fiveFg: ['#1D6B4A', '#7FD1A6'],
   fiveLine: ['#1D8A5B', '#5DCAA5'],
   fiveHi: ['#E3F0E8', '#1F3D2E'],
-  sevenBg: ['#E4DAF4', '#382A5C'],
-  sevenFg: ['#6B3FC4', '#B79CF2'],
   sevenLine: ['#6B4FD0', '#A590F0'],
   sevenHi: ['#ECE6F8', '#33285A'],
   inBg: ['#F8D9D6', '#4F2320'],
@@ -34,29 +30,21 @@ const PALETTE: Record<string, [string, string]> = {
   ttftFg: ['#0F7B6C', '#6FD0C2'],
   cacheBg: ['#DADFF8', '#262C5C'],
   cacheFg: ['#3A4BD6', '#9AA5FF'],
-  grayBg: ['#E2E2E8', '#3A3A40'],
-  grayFg: ['#55555C', '#B5B5BD'],
   keepBg: ['#FBDCC8', '#50301A'],
   keepFg: ['#C2571A', '#F0A066'],
 }
 
 export type Tone =
-  | 'five'
-  | 'seven'
   | 'in'
   | 'out'
   | 'speed'
   | 'ttft'
   | 'cache'
-  | 'gray'
   | 'keep'
 
 type IconName =
-  | 'gauge'
-  | 'calendar'
   | 'rewind'
   | 'bolt'
-  | 'doc'
   | 'pulse'
 
 /** 胶囊里的一段。`label` 用强调色，`text` 用正文色（`isAlert` 时为红色）。 */
@@ -109,16 +97,10 @@ function icon(name: IconName, c: string): string {
   const s = `class="s-${c}" fill="none"`
   const f = `class="f-${c}" stroke="none"`
   switch (name) {
-    case 'gauge':
-      return `<path ${s} d="M2.6 11.5a5.8 5.8 0 1 1 10.8 0M8 9.6l2.8-3.6"/><circle ${f} cx="8" cy="9.6" r="1.1"/>`
-    case 'calendar':
-      return `<rect ${s} x="2.3" y="3.4" width="11.4" height="10.2" rx="2"/><path ${s} d="M2.3 6.8h11.4M5.4 1.8v3M10.6 1.8v3"/><circle ${f} cx="8" cy="10.2" r="1.1"/>`
     case 'rewind':
       return `<path ${s} d="M3 8a5 5 0 1 0 1.6-3.7M2.6 2.4v2.4H5M8 5.4V8l1.9 1.4"/>`
     case 'bolt':
       return `<path ${f} d="M9.2 1.2 3.4 9.1h3.9l-.9 5.7 5.9-8h-4z"/>`
-    case 'doc':
-      return `<rect ${s} x="3.2" y="1.8" width="9.6" height="12.4" rx="1.6"/><path ${s} d="M5.6 5.2h4.8M5.6 8h4.8M5.6 10.8h3"/>`
     case 'pulse':
       return `<path ${s} d="M1.4 8h3.2l1.7-4.2 3.2 8.4L11.2 8h3.4"/>`
   }
@@ -206,11 +188,6 @@ export function pillsSvg(pills: Pill[], theme: Theme): string {
   )
 }
 
-const LIMIT_PILLS: { kind: string; label: string; tone: Tone; icon: IconName }[] = [
-  { kind: 'five_hour', label: '5h', tone: 'five', icon: 'gauge' },
-  { kind: 'seven_day', label: '7d', tone: 'seven', icon: 'calendar' },
-]
-
 function percentSeg(percent: number | undefined): Seg {
   return {
     kind: 'text',
@@ -234,10 +211,16 @@ function keepPill(keep: Keep, maxPings: number): Pill {
 }
 
 /**
- * 本会话的 token 明细：in、out、速度、首字时间、缓存与费用。
+ * 状态栏的一行胶囊：in、out、速度、首字时间、缓存与费用，保活开启时再加 keep。
  * 速度和首字时间取最近一次模型请求；缓存胶囊依次是累计读取、累计写入、命中率、本会话费用。
+ * @param isExpanded 卡片展开时在缓存胶囊末尾加上下文占用；限额只在卡片里显示。
  */
-export function detailPills(live: Live): Pill[] {
+export function statusPills(
+  live: Live,
+  keep: Keep,
+  maxPings: number,
+  isExpanded: boolean,
+): Pill[] {
   // 会话状态可能是旧版本写下的，缺这两个字段时按 0 算
   const read = live.tokRead || 0
   const write = live.tokWrite || 0
@@ -299,52 +282,10 @@ export function detailPills(live: Live): Pill[] {
       { kind: 'text', text: fmtUsd(live.costUsd) },
     )
   }
-  pills.push({ tone: 'cache', segs: cache })
-
-  return pills
-}
-
-/** 收起时的胶囊：token 明细（含费用）；上下文与限额只在展开后显示。 */
-export function collapsedPills(live: Live, keep: Keep, maxPings: number): Pill[] {
-  const pills = detailPills(live)
-  if (keep.isOn) pills.push(keepPill(keep, maxPings))
-
-  return pills
-}
-
-/** 展开时卡片下面的胶囊：限额、token 明细（含费用）、上下文。 */
-export function compactPills(
-  live: Live,
-  keep: Keep,
-  now: number,
-  maxPings: number,
-): Pill[] {
-  const pills: Pill[] = []
-  for (const spec of LIMIT_PILLS) {
-    const limit = live.limits.find(one => one.kind === spec.kind)
-    if (limit === undefined) continue
-    const segs: Seg[] = [
-      { kind: 'icon', name: spec.icon },
-      { kind: 'label', text: spec.label },
-      percentSeg(limit.percentUsed),
-    ]
-    if (limit.resetsAt !== undefined) {
-      segs.push(
-        { kind: 'sep' },
-        { kind: 'text', text: fmtDur(limit.resetsAt - now, '') },
-      )
-    }
-    pills.push({ tone: spec.tone, segs })
+  if (isExpanded) {
+    cache.push({ kind: 'sep' }, { kind: 'label', text: 'ctx' }, percentSeg(live.ctxPercent))
   }
-  pills.push(...detailPills(live))
-  pills.push({
-    tone: 'gray',
-    segs: [
-      { kind: 'icon', name: 'doc' },
-      { kind: 'label', text: 'ctx' },
-      percentSeg(live.ctxPercent),
-    ],
-  })
+  pills.push({ tone: 'cache', segs: cache })
   if (keep.isOn) pills.push(keepPill(keep, maxPings))
 
   return pills

@@ -97,16 +97,19 @@ test('状态栏在各表面都能画出，并能展开成卡片', async ($, on) 
   for (const surface of ['desktop', 'vscode'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     const pills = await ui.find({ type: 'Svg' })
-    // 收起时只有 token 明细和费用，上下文与限额要展开才有
+    // 收起时只有 token 明细和费用；展开后多出上下文，限额只在卡片里
     expect(String(pills?.props.source)).toContain('>$3.05<')
     expect(String(pills?.props.source)).not.toContain('>17%<')
-    expect(String(pills?.props.alt)).not.toContain('5h')
+    expect(String(pills?.props.alt)).not.toContain('ctx')
     expect(await ui.find({ key: 'tab-chart' })).toBe(undefined)
 
     await ui.press({ key: 'toggle' })
     const [cards, expanded] = await ui.findAll({ type: 'Svg' })
     expect(String(expanded?.props.source)).toContain('>17%<')
-    expect(String(expanded?.props.alt)).toContain('5h')
+    expect(String(expanded?.props.alt)).toContain('ctx')
+    expect(String(expanded?.props.alt)).not.toContain('5h')
+    // 一行胶囊高 20，上下各留 9；折成两行时高度会变成 65
+    expect(String(expanded?.props.source)).toContain('height="38"')
     expect(String(cards?.props.source)).toContain('On pace to finish at')
     await ui.press({ key: 'tab-model' })
     expect(String((await ui.find({ type: 'Svg' }))?.props.source)).toContain('tokens left')

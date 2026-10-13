@@ -1,7 +1,7 @@
 {
   "name": "usage-bar",
-  "version": "0.4.0",
-  "description": "输入框上方的胶囊状态栏：token、速度、缓存与费用，展开后显示上下文、5h/7d 限额和窗口卡片，以及提示缓存保活。",
+  "version": "0.4.1",
+  "description": "输入框上方的胶囊状态栏：token、速度、缓存与费用，展开后显示上下文占用和 5h/7d 窗口卡片，以及提示缓存保活。",
   "author": {
     "name": "ZeroDevi1"
   },
